@@ -6,19 +6,20 @@
 	"type": "module",
 	"scripts": {
 		"test": "node --test",
+		"test:unit": "node --test index.test.js",
+		"test:e2e": "node --test e2e.test.js",
 		"format": "prettier --write .",
 		"format:check": "prettier --check ."
 	},
 	"keywords": [
 		"markdown",
 		"LaTeX",
+		"pdf",
 		"cli",
 		"preview",
 		"files",
 		"server",
 		"browser",
-		"syntax-highlighting",
-		"frontmatter",
 		"http"
 	],
 	"engines": {
