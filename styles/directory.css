@@ -5,6 +5,14 @@
 	padding: 20px;
 }
 
+h2 {
+	margin: 30px 20px 10px 20px;
+	padding-bottom: 10px;
+	border-bottom: 2px solid #ddd;
+	font-size: 1.2em;
+	font-weight: normal;
+}
+
 .file-item {
 	border: 1px solid #ddd;
 	border-radius: 5px;
@@ -31,6 +39,9 @@
 	padding: 10px;
 	background: #fff;
 	font-weight: bold;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .file-item {
@@ -58,6 +69,11 @@
 
 	.filename {
 		background: #222;
+		color: #fff;
+	}
+
+	h2 {
+		border-bottom-color: #555;
 		color: #fff;
 	}
 }

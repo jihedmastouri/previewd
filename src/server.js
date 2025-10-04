@@ -1,6 +1,6 @@
 import { createServer } from 'http';
 import { join, extname } from 'path';
-import { stat } from 'fs';
+import { stat, watch } from 'fs';
 import markdownit from 'markdown-it';
 import hljs from 'highlight.js';
 import {
@@ -11,6 +11,7 @@ import {
 	handleLaTeXFile,
 	handleMarkdownFile,
 } from './fileHandlers.js';
+import { exec } from 'child_process';
 
 const md = markdownit({
 	highlight: function (str, lang) {
@@ -31,8 +32,13 @@ export function createAppServer(
 	serveFileOnRoot,
 	isDirectoryInit,
 	originalPath,
-	rawMode
+	rawMode,
+	format,
+	htmlMode,
+	enableRefresh = false
 ) {
+	const clients = new Set();
+
 	const server = createServer((req, res) => {
 		const cssFile = makeCSSHandler(res);
 		if (req.url === '/bamboo.css') cssFile('./styles/bamboo/style.min.css');
@@ -41,10 +47,20 @@ export function createAppServer(
 			cssFile('./styles/hjs/github-dark.min.css');
 		else if (req.url === '/directory.css')
 			cssFile('./styles/directory.css');
-		else if (req.url.startsWith('/raw/')) {
+		else if (req.url === '/events' && enableRefresh) {
+			res.writeHead(200, {
+				'Content-Type': 'text/event-stream',
+				'Cache-Control': 'no-cache',
+				Connection: 'keep-alive',
+				'Access-Control-Allow-Origin': '*',
+			});
+			clients.add(res);
+			req.on('close', () => clients.delete(res));
+			return;
+		} else if (req.url.startsWith('/raw/')) {
 			const rawPath = req.url.slice(5);
 			const fullPath = join(basePath, rawPath);
-			handleRawFile(res, fullPath);
+			handleRawFile(res, fullPath, format, htmlMode);
 			return;
 		} else {
 			let requestedPath;
@@ -66,28 +82,64 @@ export function createAppServer(
 						res,
 						requestedPath,
 						basePath,
-						isDirectoryInit
+						isDirectoryInit,
+						format,
+						htmlMode,
+						enableRefresh
 					);
 				} else if (rawMode) {
-					handleRawFile(res, requestedPath);
+					handleRawFile(
+						res,
+						requestedPath,
+						format,
+						htmlMode,
+						enableRefresh
+					);
 				} else {
 					const ext = extname(requestedPath).toLowerCase();
 					if (ext === '.pdf') {
-						handlePDFFile(res, requestedPath);
+						handlePDFFile(
+							res,
+							requestedPath,
+							format,
+							htmlMode,
+							enableRefresh
+						);
 					} else if (ext === '.tex') {
-						handleLaTeXFile(res, requestedPath, isDirectoryInit);
+						handleLaTeXFile(
+							res,
+							requestedPath,
+							isDirectoryInit,
+							format,
+							htmlMode,
+							enableRefresh
+						);
 					} else {
 						handleMarkdownFile(
 							res,
 							requestedPath,
 							md,
-							isDirectoryInit
+							isDirectoryInit,
+							format,
+							htmlMode,
+							enableRefresh
 						);
 					}
 				}
 			});
 		}
 	});
+
+	if (enableRefresh) {
+		const watchedPath = serveFileOnRoot ? originalPath : basePath;
+		watch(watchedPath, { recursive: true }, (eventType, filename) => {
+			if (eventType === 'change' && filename) {
+				clients.forEach((client) => {
+					client.write('data: refresh\n\n');
+				});
+			}
+		});
+	}
 
 	return server;
 }
@@ -105,4 +157,3 @@ export function startServer(server, port) {
 		exec(`${initCommand} http://localhost:${port}`);
 	});
 }
-

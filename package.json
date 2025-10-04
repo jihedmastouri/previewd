@@ -6,7 +6,7 @@
 	"type": "module",
 	"scripts": {
 		"test": "node --test",
-		"test:unit": "node --test index.test.js",
+		"test:unit": "node --test test/index.test.js",
 		"test:e2e": "node --test e2e.test.js",
 		"format": "prettier --write .",
 		"format:check": "prettier --check ."
@@ -16,7 +16,7 @@
 		"LaTeX",
 		"pdf",
 		"cli",
-		"preview",
+		"previewd",
 		"files",
 		"server",
 		"browser",
@@ -29,7 +29,7 @@
 	"license": "MIT",
 	"packageManager": "pnpm@10.9.0",
 	"bin": {
-		"preview": "index.js"
+		"previewd": "index.js"
 	},
 	"devDependencies": {
 		"prettier": "^3.3.3"
@@ -37,6 +37,7 @@
 	"dependencies": {
 		"gray-matter": "^4.0.3",
 		"highlight.js": "^11.11.1",
-		"markdown-it": "^14.1.0"
+		"markdown-it": "^14.1.0",
+		"yargs": "^18.0.0"
 	}
 }

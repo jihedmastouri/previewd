@@ -4,7 +4,9 @@ import { parseArgs } from './src/utils.js';
 import { initializePaths } from './src/utils.js';
 import { createAppServer, startServer } from './src/server.js';
 
-const { port, rawMode, pathname } = parseArgs(process.argv.slice(2));
+const { port, rawMode, pathname, format, htmlMode, enableRefresh } =
+	parseArgs(process.argv.slice(2));
+
 const originalPath = isAbsolute(pathname)
 	? pathname
 	: join(process.cwd(), pathname);
@@ -16,6 +18,9 @@ const server = createAppServer(
 	serveFileOnRoot,
 	isDirectoryInit,
 	originalPath,
-	rawMode
+	rawMode,
+	format,
+	htmlMode,
+	enableRefresh
 );
 startServer(server, port);
