@@ -1,0 +1,9 @@
+# Ignore node_modules and lock
+node_modules/
+pnpm-lock.yaml
+
+# Ignore minified CSS files
+styles/**/*.min.css
+
+# Ignore sample files
+samples/

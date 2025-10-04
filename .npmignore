@@ -1,0 +1,20 @@
+# Ignore test files
+test/
+samples/
+index.test.js
+
+# Ignore GitHub workflows and configs
+.github/
+
+# Ignore development config files
+.prettierrc.json
+.editorconfig
+.gitignore
+.npmignore
+.prettierignore
+
+# Ignore lock files
+pnpm-lock.yaml
+
+# Ignore README and other docs/license files
+*.md

@@ -1,0 +1,63 @@
+.directory-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 20px;
+	padding: 20px;
+}
+
+.file-item {
+	border: 1px solid #ddd;
+	border-radius: 5px;
+	overflow: hidden;
+	text-align: center;
+}
+
+.file-item a {
+	text-decoration: none;
+	color: inherit;
+	display: block;
+}
+
+.preview {
+	height: 100px;
+	padding: 10px;
+	background: #f9f9f9;
+	overflow: hidden;
+	font-size: 12px;
+	white-space: pre-wrap;
+}
+
+.filename {
+	padding: 10px;
+	background: #fff;
+	font-weight: bold;
+}
+
+.file-item {
+	border: 1px solid #ddd;
+	border-radius: 5px;
+	overflow: hidden;
+	text-align: center;
+}
+
+.file-item a {
+	text-decoration: none;
+	color: inherit;
+	display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+	.file-item {
+		border-color: #555;
+	}
+
+	.preview {
+		background: #333;
+		color: #ccc;
+	}
+
+	.filename {
+		background: #222;
+		color: #fff;
+	}
+}
