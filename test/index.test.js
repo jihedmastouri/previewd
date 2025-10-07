@@ -40,8 +40,6 @@ describe('parseArgs', () => {
 		assert.strictEqual(result.rawMode, false);
 		assert.strictEqual(result.pathname, 'README.md');
 		assert.strictEqual(result.format, undefined);
-		assert.strictEqual(result.htmlMode, false);
-		assert.strictEqual(result.enableRefresh, false);
 	});
 
 	test('should parse port', () => {
@@ -64,18 +62,6 @@ describe('parseArgs', () => {
 		assert.strictEqual(result.format, 'text/plain');
 	});
 
-	test('should parse html mode', () => {
-		const result = parseArgs(['--html']);
-		assert.strictEqual(result.htmlMode, true);
-	});
-
-	test('should parse refresh mode', () => {
-		const result = parseArgs(['--refresh']);
-		assert.strictEqual(result.enableRefresh, true);
-	});
-
-
-
 	test('should parse all args', () => {
 		const result = parseArgs([
 			'--port',
@@ -83,15 +69,11 @@ describe('parseArgs', () => {
 			'--raw',
 			'--format',
 			'application/json',
-			'--html',
-			'--refresh',
 			'file.txt',
 		]);
 		assert.strictEqual(result.port, 4000);
 		assert.strictEqual(result.rawMode, true);
 		assert.strictEqual(result.format, 'application/json');
-		assert.strictEqual(result.htmlMode, true);
-		assert.strictEqual(result.enableRefresh, true);
 		assert.strictEqual(result.pathname, 'file.txt');
 	});
 });

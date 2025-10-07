@@ -1,11 +1,12 @@
+#!/usr/bin/env node
+
 import { isAbsolute } from 'path';
 import { join } from 'path';
 import { parseArgs } from './src/utils.js';
 import { initializePaths } from './src/utils.js';
 import { createAppServer, startServer } from './src/server.js';
 
-const { port, rawMode, pathname, format, htmlMode, enableRefresh } =
-	parseArgs(process.argv.slice(2));
+const { port, rawMode, pathname, format } = parseArgs(process.argv.slice(2));
 
 const originalPath = isAbsolute(pathname)
 	? pathname
@@ -19,8 +20,7 @@ const server = createAppServer(
 	isDirectoryInit,
 	originalPath,
 	rawMode,
-	format,
-	htmlMode,
-	enableRefresh
+	format
 );
+
 startServer(server, port);

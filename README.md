@@ -35,8 +35,6 @@ previewd [path] [options]
 - `--port <number>`: Specify the port to run the server on (default: 8601)
 - `--raw`: Serve files in raw text mode without rendering
 - `--format <content-type>`: Override the default content type (e.g., `text/plain`, `application/json`)
-- `--html`: Set content type to `text/html` (shortcut for `--format text/html`)
-- `--refresh`: Enable auto-refresh when files change (browser will reload automatically)
 
 ### Examples
 
@@ -45,7 +43,6 @@ previewd                    # Preview README.md in current directory
 previewd myfile.md          # Preview specific markdown file
 previewd .                  # Preview current directory
 previewd --port 3000        # Run on port 3000
-previewd --refresh          # Enable live reload
 previewd --raw myfile.txt   # View raw text file
 previewd --help             # Show help
 ```
@@ -64,11 +61,12 @@ previewd --help             # Show help
 - NPM Dependencies:
     - **[yargs](https://www.npmjs.com/package/yargs)**: Handles command-line argument parsing.
     - **[markdown-it](https://www.npmjs.com/package/markdown-it)**: Renders Markdown to HTML.
+        - [@mdit/plugin-mathjax](https://www.npmjs.com/package/@mdit/plugin-mathjax): MarkdownIt plugin for displaying math
     - **[highlight.js](https://www.npmjs.com/package/highlight.js)**: Provides syntax highlighting for code blocks in Markdown.
-    - **[gray-matter](https://www.npmjs.com/package/gray-matter)**: Parses YAML frontmatter from Markdown files.
+        - **[gray-matter](https://www.npmjs.com/package/gray-matter)**: Parses YAML frontmatter from Markdown files.
 - CLI Dependencies:
     - **[pandoc](https://pandoc.org/)**: Required for converting LaTeX (.tex) files to HTML (must be installed separately).
 
 ---
 
-This project was done by grok-code and [opencode](https://opencode.ai).
+This project was done by `grok-code` and [opencode](https://opencode.ai).

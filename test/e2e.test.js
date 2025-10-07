@@ -2,9 +2,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import { createAppServer } from '../src/server.js';
 import { initializePaths } from '../src/utils.js';
-import { tmpdir } from 'os';
 import { join } from 'path';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import http from 'http';
 
 function makeRequest(url) {
@@ -20,7 +19,7 @@ function makeRequest(url) {
 
 describe('E2E Tests', () => {
 	test('should serve directory listing', async () => {
-		const tempDir = join(tmpdir(), 'preview-test-dir');
+		const tempDir = join(process.cwd(), 'preview-test-dir');
 		mkdirSync(tempDir, { recursive: true });
 		writeFileSync(join(tempDir, 'test.md'), '# Test');
 
@@ -46,11 +45,12 @@ describe('E2E Tests', () => {
 			assert(data.includes('test.md'));
 		} finally {
 			server.close();
+			rmSync(tempDir, { recursive: true, force: true });
 		}
 	});
 
 	test('should serve markdown file', async () => {
-		const tempFile = join(tmpdir(), 'test.md');
+		const tempFile = join(process.cwd(), 'test.md');
 		writeFileSync(tempFile, '# Hello World');
 
 		const { basePath, serveFileOnRoot, isDirectoryInit } =
@@ -74,6 +74,7 @@ describe('E2E Tests', () => {
 			assert(data.includes('<h1>Hello World</h1>'));
 		} finally {
 			server.close();
+			rmSync(tempFile, { force: true });
 		}
 	});
 });

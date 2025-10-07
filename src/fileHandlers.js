@@ -1,63 +1,72 @@
-import { readFile, readFileSync, statSync, readdir } from 'fs';
-import { join, relative, dirname, extname } from 'path';
+import { readFile, statSync, createReadStream } from 'fs';
+import { readdir } from 'fs/promises';
+import { join, relative, dirname, extname, sep } from 'path';
 import { exec } from 'child_process';
 import matter from 'gray-matter';
-import { generateBreadcrumb, defaultTemplate } from './templates.js';
+import {
+	generateBreadcrumb,
+	defaultTemplate,
+	generateHtmlMetadata,
+} from './templates.js';
+import { buffer } from 'stream/consumers';
 
-export const makeCSSHandler = (res) => (filePath) => {
+/**
+ * Handles serving a generic file with the specified content type.
+ * @param {http.ServerResponse} res - The response object.
+ * @param {string} contentType - The content type of the file.
+ * @param {string} filePath - The path to the file.
+ */
+export function handleGenericFile(res, contentType, filePath) {
 	readFile(filePath, (err, data) => {
 		if (err) {
 			console.error(err);
-			res.writeHead(404, { 'Content-Type': 'text/plain' });
+			res.writeHead(404, { 'Content-Type': contentType });
 			res.end('File not found.');
 			return;
 		}
-		res.writeHead(200, { 'Content-Type': 'text/css' });
+		res.writeHead(200, { 'Content-Type': contentType });
 		res.end(data);
 	});
-};
+}
 
-function generateFileItem(dirPath, file, basePath) {
+/**
+ * Generates an HTML list item for a file or directory.
+ * @param {string} dirPath - The directory path.
+ * @param {string} file - The file name.
+ * @param {string} basePath - The base path.
+ * @returns {Promise<string>} The generated HTML.
+ */
+async function generateListItem(dirPath, file, basePath) {
 	const fullPath = join(dirPath, file);
-	const link = '/' + relative(basePath, fullPath).replace(/\\/g, '/');
+	const link =
+		'/' +
+		relative(basePath, fullPath)
+			.split(sep)
+			.map(encodeURIComponent)
+			.join('/');
 	const stats = statSync(fullPath);
 	const ext = extname(file).toLowerCase();
-	let preview = '';
-	if (stats.isDirectory()) {
-		preview = 'Directory';
-	} else {
-		if (ext === '.pdf') {
-			preview = 'PDF Document';
-		} else if (ext === '.tex') {
-			preview = 'LaTeX Document';
-		} else if (['.txt', '.md', '.json', '.css'].includes(ext)) {
-			try {
-				const data = readFileSync(fullPath, 'utf8').substring(0, 200);
-				preview = data || 'Empty file';
-			} catch {
-				preview = 'Text file';
-			}
-		} else {
-			try {
-				const data = readFileSync(fullPath, 'utf8').substring(0, 200);
-				preview = data ? `<pre>${data}</pre>` : 'Empty file';
-			} catch {
-				preview = ext
-					? ext.substring(1).toUpperCase() + ' file'
-					: 'File';
-			}
-		}
-	}
+	const preview = await createPreviewContent(file, stats, ext);
 	const target = stats.isDirectory()
 		? ''
-		: ext === '.pdf' || ext === '.json'
+		: ext === '.pdf' || ext === '.json' || ext === '.html'
 			? ' target="_blank"'
 			: '';
+
 	let rawLink = '';
-	if (!stats.isDirectory() && ext !== '.pdf' && preview !== 'Empty file') {
+	if (
+		!stats.isDirectory() &&
+		ext !== '.pdf' &&
+		ext !== '.json' &&
+		ext !== '.html' &&
+		preview !== 'Empty file'
+	) {
 		rawLink = ` <a href="/raw${link}" target="_blank" style="margin-left: 10px; font-size: 0.8em;">raw ↗</a>`;
 	}
-	const filenameDisplay = ext === '.pdf' ? `${file} ↗` : file;
+	const filenameDisplay =
+		ext === '.pdf' || ext === '.json' || ext === '.html'
+			? `↗ ${file}`
+			: file;
 	return `
 <div class="file-item">
 	<a href="${link}"${target} title="${file}">
@@ -68,7 +77,20 @@ function generateFileItem(dirPath, file, basePath) {
 	`;
 }
 
-export function generateDirList(dirPath, files, basePath, isDirectoryInit) {
+/**
+ * Generates HTML list for directory contents.
+ * @param {string} dirPath - The directory path.
+ * @param {Array<string>} files - List of files in the directory.
+ * @param {string} basePath - The base path.
+ * @param {boolean} isDirectoryInit - Whether initialized from directory.
+ * @returns {Promise<string>} The generated HTML.
+ */
+export async function generateDirList(
+	dirPath,
+	files,
+	basePath,
+	isDirectoryInit
+) {
 	// Separate directories and files
 	const directories = [];
 	const fileItems = [];
@@ -88,11 +110,20 @@ export function generateDirList(dirPath, files, basePath, isDirectoryInit) {
 	fileItems.sort();
 
 	// Generate HTML for files first, then directories
-	const fileHtml = fileItems
-		.map((file) => generateFileItem(dirPath, file, basePath))
+	const fileHtml = (
+		await Promise.allSettled(
+			fileItems.map((file) => generateListItem(dirPath, file, basePath))
+		)
+	)
+		.map((result) => (result.status === 'fulfilled' ? result.value : ''))
 		.join('');
-	const dirHtml = directories
-		.map((file) => generateFileItem(dirPath, file, basePath))
+
+	const dirHtml = (
+		await Promise.allSettled(
+			directories.map((file) => generateListItem(dirPath, file, basePath))
+		)
+	)
+		.map((result) => (result.status === 'fulfilled' ? result.value : ''))
 		.join('');
 
 	const breadcrumb = generateBreadcrumb(dirPath);
@@ -109,28 +140,32 @@ export function generateDirList(dirPath, files, basePath, isDirectoryInit) {
 	return content;
 }
 
-export function handleDirectory(
+/**
+ * Handles directory requests by generating and serving directory listing.
+ * @param {http.ServerResponse} res - The response object.
+ * @param {string} requestedPath - The requested directory path.
+ * @param {string} basePath - The base path.
+ * @param {boolean} isDirectoryInit - Whether initialized from directory.
+ * @param {string} format - The content type format.
+ * @param {string} internalPrefix - The CSS prefix for internal files.
+ */
+export async function handleDirectory(
 	res,
 	requestedPath,
 	basePath,
 	isDirectoryInit,
 	format,
-	htmlMode,
-	enableRefresh
+	internalPrefix
 ) {
-	readdir(requestedPath, (err, files) => {
-		if (err) {
-			res.writeHead(500, { 'Content-Type': 'text/plain' });
-			res.end('Error reading directory.');
-			return;
-		}
-		const html = generateDirList(
+	try {
+		const files = await readdir(requestedPath);
+		const html = await generateDirList(
 			requestedPath,
 			files,
 			basePath,
 			isDirectoryInit
 		);
-		const contentType = format || (htmlMode ? 'text/html' : 'text/html');
+		const contentType = format || 'text/html';
 		res.writeHead(200, { 'Content-Type': contentType });
 		res.end(
 			defaultTemplate(
@@ -138,61 +173,29 @@ export function handleDirectory(
 				`Directory: ${relative(process.cwd(), requestedPath) || '.'}`,
 				'',
 				isDirectoryInit,
-				enableRefresh
+				internalPrefix
 			)
 		);
-	});
+	} catch (err) {
+		res.writeHead(500, { 'Content-Type': 'text/plain' });
+		res.end('Error reading directory.');
+	}
 }
 
-export function handleRawFile(
-	res,
-	requestedPath,
-	format,
-	htmlMode,
-	enableRefresh
-) {
-	readFile(requestedPath, (err, data) => {
-		if (err) {
-			res.writeHead(404, { 'Content-Type': 'text/plain' });
-			res.end('File not found.');
-			return;
-		}
-		const contentType = format || (htmlMode ? 'text/html' : 'text/plain');
-		res.writeHead(200, { 'Content-Type': contentType });
-		res.end(data);
-	});
-}
-
-export function handlePDFFile(
-	res,
-	requestedPath,
-	format,
-	htmlMode,
-	enableRefresh
-) {
-	readFile(requestedPath, (err, data) => {
-		if (err) {
-			res.writeHead(404, {
-				'Content-Type': 'text/plain',
-			});
-			res.end('File not found.');
-			return;
-		}
-		const contentType = format || 'application/pdf';
-		res.writeHead(200, {
-			'Content-Type': contentType,
-		});
-		res.end(data);
-	});
-}
-
+/**
+ * Handles LaTeX file requests by converting to HTML using pandoc.
+ * @param {http.ServerResponse} res - The response object.
+ * @param {string} requestedPath - The path to the LaTeX file.
+ * @param {boolean} isDirectoryInit - Whether initialized from directory.
+ * @param {string} format - The content type format.
+ * @param {string} internalPrefix - The CSS prefix for internal files.
+ */
 export function handleLaTeXFile(
 	res,
 	requestedPath,
 	isDirectoryInit,
 	format,
-	htmlMode,
-	enableRefresh
+	internalPrefix
 ) {
 	exec(
 		`pandoc -f latex -t html "${requestedPath}"`,
@@ -201,7 +204,10 @@ export function handleLaTeXFile(
 				res.writeHead(500, {
 					'Content-Type': 'text/plain',
 				});
-				res.end('Error converting LaTeX: ' + stderr);
+				const errorMsg =
+					stderr ||
+					'Pandoc not found or failed to convert. Please ensure pandoc is installed and available in your PATH.';
+				res.end('Error converting LaTeX: ' + errorMsg);
 				return;
 			}
 			const bodyMatch = stdout.match(/<body[^>]*>(.*)<\/body>/s);
@@ -210,8 +216,7 @@ export function handleLaTeXFile(
 			const navigation = isDirectoryInit
 				? generateBreadcrumb(dirname(requestedPath))
 				: '';
-			const contentType =
-				format || (htmlMode ? 'text/html' : 'text/html');
+			const contentType = format || 'text/html';
 			res.writeHead(200, { 'Content-Type': contentType });
 			res.end(
 				defaultTemplate(
@@ -219,21 +224,62 @@ export function handleLaTeXFile(
 					title,
 					navigation,
 					isDirectoryInit,
-					enableRefresh
+					internalPrefix
 				)
 			);
 		}
 	);
 }
 
+/**
+ * Handles HTML file requests by serving raw HTML with optional refresh script.
+ * @param {http.ServerResponse} res - The response object.
+ * @param {string} requestedPath - The path to the HTML file.
+ * @param {string} internalPrefix - The CSS prefix for internal files.
+ */
+export function handleHtmlFile(res, requestedPath, internalPrefix) {
+	readFile(requestedPath, (err, data) => {
+		if (err) {
+			res.writeHead(404, { 'Content-Type': 'text/plain' });
+			res.end('File not found.');
+			return;
+		}
+		let html = data.toString();
+		const refreshScript = `<script>
+				const evtSource = new EventSource('/events');
+				evtSource.onmessage = function(event) {
+					if (event.data === 'refresh') {
+						location.reload();
+					}
+				};
+			</script>`;
+		if (html.includes('</body>')) {
+			html = html.replace('</body>', refreshScript + '</body>');
+		} else {
+			html += refreshScript;
+		}
+		res.writeHead(200, { 'Content-Type': 'text/html' });
+		res.end(html);
+	});
+}
+
+/**
+ * Handles Markdown file requests by rendering to HTML.
+ * @param {http.ServerResponse} res - The response object.
+ * @param {string} requestedPath - The path to the Markdown file.
+ * @param {string} basePath - The base path for serving files.
+ * @param {markdownit} md - The markdown-it instance.
+ * @param {boolean} isDirectoryInit - Whether initialized from directory.
+ * @param {string} format - The content type format.
+ * @param {string} internalPrefix - The CSS prefix for internal files.
+ */
 export function handleMarkdownFile(
 	res,
 	requestedPath,
 	md,
 	isDirectoryInit,
 	format,
-	htmlMode,
-	enableRefresh
+	internalPrefix
 ) {
 	readFile(requestedPath, (err, data) => {
 		if (err) {
@@ -244,34 +290,14 @@ export function handleMarkdownFile(
 			return;
 		}
 		const { content, data: metadata } = matter(data.toString());
-		const parsedHtml = md.render(content);
-		let metadataHtml = '';
-		if (Object.keys(metadata).length > 0) {
-			const tableRows = Object.entries(metadata)
-				.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`)
-				.join('');
-			metadataHtml = `
-<div class="metadata">
-<button onclick="toggleMetadata()">Toggle Metadata</button>
-<table id="metadataTable" style="display:none; border-collapse: collapse;">
-<thead><tr><th style="border: 1px solid #ccc; padding: 8px;">Key</th><th style="border: 1px solid #ccc; padding: 8px;">Value</th></tr></thead>
-<tbody>${tableRows}</tbody>
-</table>
-<script>
-function toggleMetadata() {
-  const table = document.getElementById('metadataTable');
-  table.style.display = table.style.display === 'none' ? 'table' : 'none';
-}
-</script>
-</div>
-`;
-		}
+		let parsedHtml = md.render(content);
+		let metadataHtml = generateHtmlMetadata(metadata);
 		const fullContent = metadataHtml + parsedHtml;
 		const title = metadata.title || relative(process.cwd(), requestedPath);
 		const navigation = isDirectoryInit
 			? generateBreadcrumb(dirname(requestedPath))
 			: '';
-		const contentType = format || (htmlMode ? 'text/html' : 'text/html');
+		const contentType = format || 'text/html';
 		res.writeHead(200, { 'Content-Type': contentType });
 		res.end(
 			defaultTemplate(
@@ -279,8 +305,71 @@ function toggleMetadata() {
 				title,
 				navigation,
 				isDirectoryInit,
-				enableRefresh
+				internalPrefix
 			)
 		);
 	});
+}
+
+/**
+ * Reads a chunk of a file as a string.
+ * @param {string} path - The file path.
+ * @param {AbortController} [abortController] - Optional abort controller.
+ * @param {number} [chunkSize=67108864] - The chunk size in bytes.
+ * @returns {Promise<string>} The file content as a string.
+ */
+async function readChunk(
+	path,
+	abortController = undefined,
+	chunkSize = 64 * 1024 * 1024
+) {
+	const rl = createReadStream(path, {
+		encoding: 'utf8',
+		highWaterMark: chunkSize,
+		autoClose: true,
+		...(abortController ? { signal: abortController } : {}),
+	});
+
+	const buf = await buffer(rl);
+	return buf.toString();
+}
+
+/**
+ * Creates preview content for a file based on its type and content.
+ * @param {string} file - The file path.
+ * @param {fs.Stats} stats - The file stats.
+ * @param {string} ext - The file extension.
+ * @returns {Promise<string>} The preview content.
+ */
+async function createPreviewContent(file, stats, ext) {
+	if (stats.isDirectory()) return 'Directory';
+
+	const noPreviewFiles = {
+		'.pdf': 'PDF Document',
+		'.tex': 'LaTeX Document',
+	};
+
+	const textFiles = {
+		'.md': 'Markdown Document',
+		'.txt': 'Text Document',
+	};
+
+	if (Object.keys(noPreviewFiles).includes(ext)) {
+		return noPreviewFiles[ext] || 'FILE';
+	}
+
+	let content = '';
+	try {
+		content = await readChunk(file);
+	} catch {
+		return 'FILE';
+	}
+
+	if (content.length == 0) return 'Empty File';
+
+	if (Object.keys(textFiles).includes(ext)) {
+		return content;
+	}
+
+	return `<pre>${content}</pre>`;
 }
